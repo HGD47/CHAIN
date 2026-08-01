@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Custom Timelines — Wire{% endblock %}
+{% block content %}
+
+<section class="panel" style="border-top:none; padding-top:0;">
+  <h1 class="panel-title">Your timelines</h1>
+  <p class="panel-hint">Build a focused timeline around one story or topic by adding stories to it from the main feed. Each one is saved to disk, sorted by when the story was originally published, and stays here whenever you come back.</p>
+
+  {% if not timelines %}
+    <div class="empty-state">
+      <p class="empty-headline">No custom timelines yet.</p>
+      <p>Create one below, or use "+ Add to a custom timeline" on any story from the <a href="{{ url_for('index') }}">Timeline</a> page.</p>
+    </div>
+  {% else %}
+  <div class="timeline-grid">
+    {% for t in timelines %}
+    <a class="timeline-card" href="{{ url_for('timeline_detail', timeline_id=t.id) }}">
+      <span class="timeline-card-name">{{ t.name }}</span>
+      <span class="timeline-card-meta">{{ t.stories|length }} stor{{ 'y' if t.stories|length == 1 else 'ies' }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h1 class="panel-title">Create a new timeline</h1>
+  <form method="post" action="{{ url_for('timelines_new') }}" class="add-custom-form">
+    <input type="text" name="name" placeholder="e.g. 2026 Election Coverage" required>
+    <button type="submit" class="btn-primary">Create</button>
+  </form>
+</section>
+
+{% endblock %}

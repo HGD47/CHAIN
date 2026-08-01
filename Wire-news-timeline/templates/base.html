@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Wire — Local News Timeline{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-left">
+      <a class="home-link" href="{{ url_for('index') }}" title="Back to timeline" aria-label="Back to timeline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path>
+          <path d="M14 11a5 5 0 0 0-7.07 0l-2.83 2.83a5 5 0 0 0 7.07 7.07l1.5-1.5"></path>
+        </svg>
+      </a>
+      <a class="wordmark" href="{{ url_for('index') }}">WIRE<span class="wordmark-dot">.</span></a>
+    </div>
+    <nav class="mast-nav">
+      <a href="{{ url_for('index') }}" class="{{ 'is-active' if request.endpoint == 'index' }}">
+        Timeline{% if new_count %}<span class="nav-badge">{{ new_count }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('timelines_list') }}" class="{{ 'is-active' if request.endpoint in ('timelines_list', 'timeline_detail') }}">Custom Timelines</a>
+      <a href="{{ url_for('settings') }}" class="{{ 'is-active' if request.endpoint == 'settings' }}">Sources</a>
+    </nav>
+  </div>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-stack">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+
+</body>
+</html>
