@@ -139,3 +139,10 @@ the threshold needs adjusting.
 
 Edit the `STARTER_SOURCES` dict in `sources.py` — it's just
 `key: (display name, RSS url)`. No code changes needed elsewhere.
+
+## Authors Note
+-made by a free claude subscription
+-barely works
+-published so i could give it to friends
+-if u like it use it
+-ive found it very helpful tbh
