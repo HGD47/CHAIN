@@ -20,6 +20,7 @@ from sources import STARTER_SOURCES, SOURCE_INFO
 from fetcher import fetch_all
 from rule_engine import find_matches, MAX_KEYWORDS
 from body_fetch import fetch_body_text
+from region_tags import REGION_DEFS, tag_regions
 
 if getattr(sys, "frozen", False):
     RESOURCE_DIR = sys._MEIPASS
@@ -246,6 +247,7 @@ def index():
     show_hidden = request.args.get("show_hidden") == "1"
     query = request.args.get("q", "").strip()
     source_filter = request.args.get("source_filter", "").strip()
+    region_filter = request.args.get("region_filter", "").strip()
     sort_by = request.args.get("sort", "newest")
     select_mode = request.args.get("select") == "1"
 
@@ -265,6 +267,9 @@ def index():
     if source_filter:
         visible = [a for a in visible if a["source_name"] == source_filter]
 
+    if region_filter:
+        visible = [a for a in visible if region_filter in tag_regions(a)]
+
     sort_map = {
         "newest": (lambda a: a["published_ts"], True),
         "oldest": (lambda a: a["published_ts"], False),
@@ -278,6 +283,11 @@ def index():
 
     truncated = len(visible) > MAX_TIMELINE_ROWS
     visible = visible[:MAX_TIMELINE_ROWS]
+
+    # Region tags only computed for what's actually being shown — cheap
+    # regex work, but no point running it over the full history every load.
+    for a in visible:
+        a["region_tags"] = [(k, REGION_DEFS[k].get("display", REGION_DEFS[k]["label"])) for k in tag_regions(a)]
 
     hidden_count = sum(1 for a in articles if a["is_hidden"])
     all_source_names = sorted({a["source_name"] for a in articles})
@@ -298,9 +308,11 @@ def index():
         timelines=timelines,
         query=query,
         source_filter=source_filter,
+        region_filter=region_filter,
         sort_by=sort_by,
         all_source_names=all_source_names,
         hidden_count=hidden_count,
+        region_defs=REGION_DEFS,
     )
 
 
@@ -597,6 +609,41 @@ def timeline_delete(timeline_id):
         save_timelines(timelines)
         flash(f'Deleted "{timeline["name"]}".', "success")
     return redirect(url_for("timelines_list"))
+
+
+# ---------- Regions ----------
+
+@app.route("/regions")
+def regions_list():
+    query = request.args.get("q", "").strip().lower()
+    items = sorted(REGION_DEFS.items(), key=lambda kv: kv[1]["label"])
+    if query:
+        items = [(k, v) for k, v in items if query in v["label"].lower()]
+    return render_template("regions.html", regions=items, query=request.args.get("q", ""))
+
+
+@app.route("/regions/<region_key>")
+def region_detail(region_key):
+    info = REGION_DEFS.get(region_key)
+    if not info:
+        flash("That region doesn't exist.", "error")
+        return redirect(url_for("regions_list"))
+
+    articles = load_articles()
+    dismissed = load_dismissed()
+    matches = []
+    for a in articles:
+        if a["id"] in dismissed:
+            continue
+        tags = tag_regions(a)
+        if region_key in tags:
+            a = dict(a)
+            a["region_tags"] = [(k, REGION_DEFS[k].get("display", REGION_DEFS[k]["label"])) for k in tags]
+            matches.append(a)
+    matches.sort(key=lambda a: a["published_ts"], reverse=True)
+    matches = matches[:MAX_TIMELINE_ROWS]
+
+    return render_template("region_detail.html", key=region_key, info=info, articles=matches)
 
 
 # ---------- Sources (pick outlets + read about them) ----------

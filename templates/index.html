@@ -27,6 +27,12 @@
       <option value="{{ name }}" {{ 'selected' if name == source_filter }}>{{ name }}</option>
     {% endfor %}
   </select>
+  <select name="region_filter">
+    <option value="">All regions</option>
+    {% for key, info in region_defs.items() | sort(attribute='1.label') %}
+      <option value="{{ key }}" {{ 'selected' if key == region_filter }}>{{ info.label }}</option>
+    {% endfor %}
+  </select>
   <select name="sort">
     <option value="newest" {{ 'selected' if sort_by == 'newest' }}>Newest first</option>
     <option value="oldest" {{ 'selected' if sort_by == 'oldest' }}>Oldest first</option>
@@ -37,7 +43,7 @@
   </select>
   {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
   <button type="submit" class="btn-add">Search</button>
-  {% if query or source_filter or sort_by != 'newest' %}
+  {% if query or source_filter or region_filter or sort_by != 'newest' %}
     <a href="{{ url_for('index', show_hidden=1 if show_hidden else None) }}" class="clear-search">Clear</a>
   {% endif %}
 </form>
@@ -124,6 +130,13 @@
       <div class="stamp-row">
         <span class="stamp">{{ a.source_name }}</span>
       </div>
+      {% if a.region_tags %}
+      <div class="region-tag-row">
+        {% for key, display in a.region_tags %}
+          <a href="{{ url_for('region_detail', region_key=key) }}" class="region-tag">{{ display }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
 
       <details class="add-to-timeline">
         <summary>+ Add to a custom timeline</summary>

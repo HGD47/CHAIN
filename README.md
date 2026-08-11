@@ -7,6 +7,31 @@ feed you enable.
 
 ## What's new in this version
 
+- **Regions** — a new tab covering 5 countries (Canada, USA, Spain, UK,
+  Mexico) and 7 supra-national groupings (EU, Europe, North America,
+  South America, Africa, Asia, NATO). Every story gets scanned for
+  region names in its headline/summary; matches show up as an orange
+  tag under the blue source tag, and get filed onto every matching
+  region's page. Each region page has a real highlighted map (derived
+  from an open-source world map, CC BY-SA — see Files below) and a
+  written overview of its political/geographic landscape. This is a
+  keyword-matching heuristic, not real geocoding — it'll occasionally
+  mis-tag or miss something, by design kept simple over precise.
+- The main Timeline's search bar now also has a region filter.
+- Fixed the Rename button on Your Timelines being squeezed into a fixed
+  30px icon slot — it now sizes to its label properly.
+- Fixed RSS fetches having no timeout and no browser-identifying header,
+  which caused hangs that eventually surfaced as raw OS-level errors
+  (e.g. Windows' `WinError 10060`) instead of a clear message. Fetches
+  now time out cleanly at 15s, retry once on a dropped connection, and
+  send a normal browser User-Agent (some outlets quietly block bare
+  Python HTTP clients).
+- Hardened the auto-close-tab-on-Stop behavior so a brief network blip
+  (wifi hiccup, laptop sleep) can't falsely trigger it — it now double-
+  checks the server is actually gone first.
+- `launch_windows.bat` no longer pauses on a clean Stop — only on an
+  actual crash — so the console window now closes itself properly.
+
 - **Word-catch rules on Your Timelines** — up to 4 keywords, with a
   choice of matching mode: **all keywords in the same article**, or
   **keywords across different articles, published within N days of each
@@ -183,16 +208,37 @@ after the fact.
 ## Files
 
 - `app.py` — Flask routes: timeline, hide/unhide, select mode, custom
-  timelines, notifications, sources, settings, manual + automatic pulls
+  timelines (incl. word-catch rules), notifications, regions, sources,
+  settings, manual + automatic pulls, console/stop controls
 - `sources.py` — the starter outlet list (name + RSS URL) plus the
   leaning/ownership/credibility notes shown on the Sources page
-- `fetcher.py` — fetches and normalizes each RSS feed
+- `fetcher.py` — fetches and normalizes each RSS feed (15s timeout,
+  one retry on a dropped connection, browser User-Agent)
+- `rule_engine.py` — matches articles against a timeline's word-catch
+  rule (up to 4 keywords, same-article or cross-article-within-a-
+  time-window modes)
+- `body_fetch.py` — fetches + extracts full article text for rules with
+  "also search full article text" turned on (cached per-article)
+- `region_tags.py` — the 12 supported countries/regions: their tagging
+  keywords, descriptions, and map assets
 - `config_store.py` — all local JSON persistence: `config.json` (sources,
   tuning, pull bookkeeping), `articles.json` (full article history —
   this **is** the timeline now), `dismissed.json` (hidden article ids),
   `timelines.json` (your saved custom timelines), `notifications.json`
   (system messages) — all created next to the app on first use
+- `static/maps/*.svg` — the 12 region maps. Derived from "Simple World
+  Map" by Al MacDonald, edited by Fritz Lekschas, CC BY-SA 3.0
+  (github.com/flekschas/simple-world-map) — cropped, highlighted, and
+  recolored per region
 - `templates/`, `static/style.css` — the UI
+
+## Adding a region
+
+Edit `REGION_DEFS` in `region_tags.py` — each entry needs a `label`,
+`keywords` (word-boundary matched, case-insensitive), and `description`.
+For the map, you'd need a highlighted SVG at `static/maps/<key>.svg` in
+the same coordinate system as the others (not a quick copy-paste — see
+the comment at the top of `region_tags.py` for the source map).
 
 ## Adding a source permanently to the starter list
 

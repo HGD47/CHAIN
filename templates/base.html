@@ -24,6 +24,7 @@
         Timeline{% if new_count %}<span class="nav-badge">{{ new_count }}</span>{% endif %}
       </a>
       <a href="{{ url_for('timelines_list') }}" class="{{ 'is-active' if request.endpoint in ('timelines_list', 'timeline_detail') }}">Your Timelines</a>
+      <a href="{{ url_for('regions_list') }}" class="{{ 'is-active' if request.endpoint in ('regions_list', 'region_detail') }}">Regions</a>
       <a href="{{ url_for('sources_page') }}" class="{{ 'is-active' if request.endpoint == 'sources_page' }}">Sources</a>
       <a href="{{ url_for('notifications_page') }}" class="{{ 'is-active' if request.endpoint == 'notifications_page' }}">
         Notifications{% if notif_count %}<span class="nav-badge">{{ notif_count }}</span>{% endif %}

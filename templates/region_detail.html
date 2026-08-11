@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ info.label }} — Wire{% endblock %}
+{% block content %}
+
+<section class="run-bar">
+  <div class="run-bar-status">
+    <a href="{{ url_for('regions_list') }}" class="back-link">&larr; All regions</a>
+  </div>
+</section>
+
+<div class="region-header">
+  <img src="{{ url_for('static', filename='maps/' + key + '.svg') }}" alt="Map of {{ info.label }}" class="region-map">
+  <div>
+    <h1 class="timeline-title">{{ info.label }}</h1>
+    <span class="outlet-lean-tag" style="border-color:var(--muted); color:var(--muted);">{{ 'Country' if info.is_country else 'Region / alliance' }}</span>
+    <p class="region-description">{{ info.description }}</p>
+  </div>
+</div>
+
+<p class="panel-hint">{{ articles|length }} stor{{ 'y' if articles|length == 1 else 'ies' }} tagged {{ info.label }}, newest first.</p>
+
+{% if not articles %}
+  <div class="empty-state">
+    <p class="empty-headline">Nothing tagged {{ info.label }} yet.</p>
+    <p>Pull the wire from the <a href="{{ url_for('index') }}">Timeline</a> page, or check back later.</p>
+  </div>
+{% else %}
+<div class="wire">
+  {% for a in articles %}
+  <article class="event">
+    <div class="event-time-col">
+      <span class="abs-date">{{ a.published | format_date }}</span>
+      <span class="rel-time">{{ a.published | relative_time }}</span>
+    </div>
+    <div class="event-card">
+      <h2 class="event-headline">
+        <a href="{{ a.link }}" target="_blank" rel="noopener">{{ a.title }}</a>
+      </h2>
+      <div class="stamp-row">
+        <span class="stamp">{{ a.source_name }}</span>
+      </div>
+      {% if a.region_tags|length > 1 %}
+      <div class="region-tag-row">
+        {% for rkey, display in a.region_tags %}
+          {% if rkey != key %}
+          <a href="{{ url_for('region_detail', region_key=rkey) }}" class="region-tag">{{ display }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Regions — Wire{% endblock %}
+{% block content %}
+
+<section class="panel" style="border-top:none; padding-top:0;">
+  <h1 class="panel-title">Regions</h1>
+  <p class="panel-hint">
+    Every story on the wire gets scanned for country/region names in its headline and summary — matches show up as an orange tag on the story and get filed into every region below that matched. It's a lightweight keyword match, not real geocoding, so it'll occasionally mis-tag or miss something; think of it as a rough filter, not a precise index.
+  </p>
+</section>
+
+<form method="get" action="{{ url_for('regions_list') }}" class="search-bar">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search regions… e.g. Spain">
+  <button type="submit" class="btn-add">Search</button>
+  {% if query %}<a href="{{ url_for('regions_list') }}" class="clear-search">Clear</a>{% endif %}
+</form>
+
+{% if not regions %}
+  <div class="empty-state">
+    <p class="empty-headline">No regions match that search.</p>
+  </div>
+{% else %}
+<div class="timeline-grid">
+  {% for key, info in regions %}
+  <a class="timeline-card region-card" href="{{ url_for('region_detail', region_key=key) }}">
+    <img src="{{ url_for('static', filename='maps/' + key + '.svg') }}" alt="" class="region-card-map">
+    <span class="timeline-card-name">{{ info.label }}</span>
+    <span class="timeline-card-meta">{{ 'Country' if info.is_country else 'Region / alliance' }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
