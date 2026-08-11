@@ -26,4 +26,8 @@ echo Your browser will open automatically. Close this window to stop the app.
 echo.
 python app.py
 
-pause
+if errorlevel 1 (
+    echo.
+    echo Wire exited with an error - see above for details.
+    pause
+)

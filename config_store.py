@@ -1,20 +1,18 @@
 """
 Local JSON files that hold everything between runs:
 
-- config.json     -> which sources are enabled, custom feeds, tuning
-                      knobs, and when you last viewed the timeline
-- articles.json   -> every article ever pulled (deduped by link), so the
-                      timeline builds up a real history instead of only
-                      showing whatever came back on the last refresh
-- cache.json      -> the clustered events computed from articles.json,
-                      so the timeline page loads instantly without
-                      reclustering on every request
-- dismissed.json  -> ids of events you've hidden from the main timeline
-- timelines.json  -> your saved custom timelines (name + a snapshot of
-                      whichever stories you added to each one)
+- config.json       -> which sources are enabled, custom feeds, tuning
+                        knobs, last-pull bookkeeping, auto-pull settings
+- articles.json      -> every article ever pulled, deduped by link — this
+                        IS the timeline now (no more clustering step)
+- dismissed.json    -> ids of articles you've hidden
+- timelines.json    -> your saved custom ("Your Timelines") timelines
+- notifications.json -> system notices (source errors, storage warnings),
+                        clearable independently of everything else
 
 This app is meant to run on your own machine only.
 """
+import hashlib
 import json
 import os
 import sys
@@ -29,36 +27,41 @@ else:
     _DATA_DIR = os.path.dirname(__file__)
 
 CONFIG_PATH = os.path.join(_DATA_DIR, "config.json")
-CACHE_PATH = os.path.join(_DATA_DIR, "cache.json")
 ARTICLES_PATH = os.path.join(_DATA_DIR, "articles.json")
 DISMISSED_PATH = os.path.join(_DATA_DIR, "dismissed.json")
 TIMELINES_PATH = os.path.join(_DATA_DIR, "timelines.json")
+NOTIFICATIONS_PATH = os.path.join(_DATA_DIR, "notifications.json")
 
 DEFAULTS = {
     # starter sources default to OFF so you consciously pick your outlets
     "enabled_starter": [],
     # list of {"name": str, "url": str} dicts the user typed in themselves
     "custom_sources": [],
-    # how close two headlines need to be (0-1) to stack as the same event
-    "cluster_threshold": 0.42,
-    # only cluster articles published within this many hours of each other
-    "cluster_window_hours": 36,
     # how many days of history to keep around before an article is pruned
     # from the local store (keeps articles.json from growing forever)
     "retention_days": 45,
     # unix timestamp of the last time the timeline was opened; used to
-    # figure out which events are "new since you last checked"
+    # figure out which articles are "new since you last checked"
     "last_viewed_ts": 0,
+    # "dark" or "light"
+    "theme": "dark",
+    # bookkeeping for the most recent pull (manual or automatic)
+    "last_pull_ts": None,
+    "last_pull_errors": [],
+    # optional background auto-pull, off by default — only runs while
+    # the app process is actually open on your machine
+    "auto_pull_enabled": False,
+    "auto_pull_interval_hours": 4,
+    # 0 = unlimited (default). Otherwise, a warning notification fires
+    # once articles.json crosses this size — nothing is auto-deleted.
+    "storage_limit_mb": 0,
 }
 
 
 def load_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
-        # A brand new install: nothing has ever been pulled, so there's
-        # nothing to flag as "new" yet. Stamping last_viewed_ts as "now"
-        # (instead of 0 / the dawn of time) means the very first pull you
-        # ever do won't light up every single event as NEW.
         data = dict(DEFAULTS)
+        # A brand new install has nothing to flag as "new" yet.
         data["last_viewed_ts"] = time.time()
         return data
     with open(CONFIG_PATH, "r") as f:
@@ -74,8 +77,6 @@ def save_config(data: dict) -> None:
 
 
 def get_active_sources(config: dict) -> list:
-    """Returns a flat list of {"key", "name", "url"} for every source
-    currently turned on (starter outlets picked + all custom feeds)."""
     active = []
     for key in config.get("enabled_starter", []):
         if key in STARTER_SOURCES:
@@ -86,24 +87,14 @@ def get_active_sources(config: dict) -> list:
     return active
 
 
-def load_cache() -> dict:
-    if not os.path.exists(CACHE_PATH):
-        return {"last_run": None, "events": [], "errors": []}
-    with open(CACHE_PATH, "r") as f:
-        return json.load(f)
+# ---------- Persistent article store (this IS the timeline now) ----------
 
+def article_id(article: dict) -> str:
+    basis = article.get("link") or article.get("title", "")
+    return "art_" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
 
-def save_cache(data: dict) -> None:
-    with open(CACHE_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-# ---------- Persistent article store ----------
 
 def load_articles() -> list:
-    """All articles ever pulled, deduped by link. This is the source of
-    truth the timeline is built from — cache.json is just a precomputed
-    view of this for fast page loads."""
     if not os.path.exists(ARTICLES_PATH):
         return []
     with open(ARTICLES_PATH, "r") as f:
@@ -116,44 +107,49 @@ def save_articles(articles: list) -> None:
 
 
 def merge_articles(existing: list, new_articles: list, retention_days: float = 45) -> tuple:
-    """Adds any genuinely new articles (by link, falling back to
-    source+title for the rare item with no link) into the existing store,
-    and drops anything older than retention_days so the file doesn't grow
-    forever. Existing articles are left untouched — this never rewrites
-    history, only adds to it and prunes the oldest edge.
-    Returns (merged_list, count_added)."""
+    """Adds any genuinely new articles (deduped by link) into the store,
+    stamping each with a stable id and the time it entered local storage,
+    and drops anything older than retention_days. Existing entries are
+    left untouched. Returns (merged_list, count_added)."""
     seen_keys = set()
     merged = []
+    cutoff_ts = time.time() - (retention_days * 86400)
 
     def key_for(a):
         return a.get("link") or f"{a.get('source_key')}::{a.get('title')}"
 
-    cutoff_ts = time.time() - (retention_days * 86400)
-
     for a in existing:
-        k = key_for(a)
         if a.get("published_ts", 0) < cutoff_ts:
             continue
+        k = key_for(a)
         if k in seen_keys:
             continue
         seen_keys.add(k)
         merged.append(a)
 
     added = 0
+    now = time.time()
     for a in new_articles:
         k = key_for(a)
-        if k in seen_keys:
-            continue
-        if a.get("published_ts", 0) < cutoff_ts:
+        if k in seen_keys or a.get("published_ts", 0) < cutoff_ts:
             continue
         seen_keys.add(k)
+        a = dict(a)
+        a["id"] = article_id(a)
+        a["first_stored_ts"] = now
         merged.append(a)
         added += 1
 
     return merged, added
 
 
-# ---------- Dismissed / hidden events ----------
+def get_articles_storage_mb() -> float:
+    if not os.path.exists(ARTICLES_PATH):
+        return 0.0
+    return round(os.path.getsize(ARTICLES_PATH) / (1024 * 1024), 2)
+
+
+# ---------- Dismissed / hidden articles ----------
 
 def load_dismissed() -> set:
     if not os.path.exists(DISMISSED_PATH):
@@ -167,7 +163,7 @@ def save_dismissed(dismissed_ids) -> None:
         json.dump(sorted(dismissed_ids), f, indent=2)
 
 
-# ---------- Custom timelines ----------
+# ---------- Custom timelines ("Your Timelines") ----------
 
 def load_timelines() -> list:
     if not os.path.exists(TIMELINES_PATH):
@@ -208,10 +204,39 @@ def create_timeline(timelines: list, name: str) -> dict:
 
 
 def add_story_to_timeline(timeline: dict, story: dict) -> bool:
-    """Adds a story snapshot to a timeline, deduped by link.
-    Returns True if it was actually added (False if already present)."""
     existing_links = {s.get("link") for s in timeline["stories"] if s.get("link")}
     if story.get("link") and story["link"] in existing_links:
         return False
     timeline["stories"].append(story)
     return True
+
+
+# ---------- System notifications (source errors, storage warnings) ----------
+
+def load_notifications() -> list:
+    if not os.path.exists(NOTIFICATIONS_PATH):
+        return []
+    with open(NOTIFICATIONS_PATH, "r") as f:
+        return json.load(f)
+
+
+def save_notifications(notifications: list) -> None:
+    with open(NOTIFICATIONS_PATH, "w") as f:
+        json.dump(notifications, f, indent=2)
+
+
+def add_notification(notifications: list, kind: str, summary: str, details: list = None) -> dict:
+    entry = {
+        "id": uuid.uuid4().hex[:12],
+        "kind": kind,  # "source_error" | "storage_warning"
+        "summary": summary,
+        "details": details or [],
+        "created_at": time.time(),
+        "cleared": False,
+    }
+    notifications.append(entry)
+    return entry
+
+
+def has_uncleared_of_kind(notifications: list, kind: str) -> bool:
+    return any(n["kind"] == kind and not n["cleared"] for n in notifications)

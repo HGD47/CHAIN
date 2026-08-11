@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Sources — Wire{% endblock %}
+{% block content %}
+
+<form method="post" action="{{ url_for('sources_page') }}">
+<input type="hidden" name="action" value="save">
+
+<section class="panel" style="border-top:none; padding-top:0;">
+  <h1 class="panel-title">Pick your outlets</h1>
+  <p class="panel-hint">Turn on whichever major outlets you want on the wire, and read about each one below — leaning, ownership, and credibility notes. RSS feeds occasionally move; if one stops returning anything, it'll show up as an error in Notifications rather than breaking the others.</p>
+
+  <div class="source-grid">
+    {% for key, (name, url) in starter_sources.items() %}
+    <label class="source-toggle">
+      <input type="checkbox" name="starter_enabled" value="{{ key }}"
+        {{ 'checked' if key in config.enabled_starter }}>
+      <span class="source-name">{{ name }}</span>
+      <span class="source-url">{{ url }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</section>
+
+<button type="submit" class="btn-primary">Save sources</button>
+</form>
+
+<section class="panel">
+  <h1 class="panel-title">About these outlets</h1>
+  <p class="panel-hint">
+    Leaning labels follow the AllSides Media Bias Chart convention (Left / Lean Left / Center / Lean Right / Right) — the most widely cited framework, though AllSides, Ad Fontes Media, and Media Bias/Fact Check don't always agree with each other, and every bias rating is a contestable judgment call, not a settled fact. Ownership is more verifiable but changes with mergers — flagged below wherever a deal was recent or still pending.
+  </p>
+
+  <div class="outlet-list">
+    {% for key, (name, url) in starter_sources.items() %}
+    {% set info = source_info.get(key) %}
+    {% if info %}
+    <div class="outlet-card">
+      <div class="outlet-card-head">
+        <span class="outlet-name">{{ name }}</span>
+        <span class="outlet-lean-tag">{{ info.leaning }}</span>
+      </div>
+      <p class="outlet-field"><strong>Ownership</strong> — {{ info.ownership }}</p>
+      <p class="outlet-field"><strong>Credibility notes</strong> — {{ info.credibility }}</p>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h1 class="panel-title">Custom feeds</h1>
+  <p class="panel-hint">Any outlet with a public RSS URL works here — local papers, trade press, blogs, whatever you want on your wire.</p>
+
+  {% if config.custom_sources %}
+  <ul class="custom-list">
+    {% for src in config.custom_sources %}
+    <li>
+      <div>
+        <span class="source-name">{{ src.name }}</span>
+        <span class="source-url">{{ src.url }}</span>
+      </div>
+      <form method="post" action="{{ url_for('sources_page') }}">
+        <input type="hidden" name="action" value="remove_custom">
+        <input type="hidden" name="index" value="{{ loop.index0 }}">
+        <button type="submit" class="btn-remove">Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('sources_page') }}" class="add-custom-form">
+    <input type="hidden" name="action" value="add_custom">
+    <input type="text" name="custom_name" placeholder="Display name (e.g. Local Gazette)" required>
+    <input type="url" name="custom_url" placeholder="https://example.com/rss.xml" required>
+    <button type="submit" class="btn-primary">Add feed</button>
+  </form>
+</section>
+
+{% endblock %}

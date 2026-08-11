@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Timeline — Wire{% endblock %}
+{% block content %}
+
+<section class="run-bar">
+  <div class="run-bar-status">
+    {% if last_pull_ts %}
+      <span class="run-label">Last pulled</span>
+      <span class="run-value">{{ last_pull_ts | format_date }}</span>
+      <span class="run-rel">({{ last_pull_ts | relative_time }})</span>
+    {% else %}
+      <span class="run-label">No pulls yet</span>
+    {% endif %}
+    <span class="run-sep">&middot;</span>
+    <span class="run-label">{{ active_count }} source{{ 's' if active_count != 1 }} on</span>
+  </div>
+  <form method="post" action="{{ url_for('refresh') }}">
+    <button type="submit" class="btn-refresh">Pull latest</button>
+  </form>
+</section>
+
+<form method="get" action="{{ url_for('index') }}" class="search-bar">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search headlines… e.g. Spain">
+  <select name="source_filter">
+    <option value="">All sources</option>
+    {% for name in all_source_names %}
+      <option value="{{ name }}" {{ 'selected' if name == source_filter }}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  <select name="sort">
+    <option value="newest" {{ 'selected' if sort_by == 'newest' }}>Newest first</option>
+    <option value="oldest" {{ 'selected' if sort_by == 'oldest' }}>Oldest first</option>
+    <option value="headline_az" {{ 'selected' if sort_by == 'headline_az' }}>Headline A–Z</option>
+    <option value="headline_za" {{ 'selected' if sort_by == 'headline_za' }}>Headline Z–A</option>
+    <option value="source_az" {{ 'selected' if sort_by == 'source_az' }}>Source A–Z</option>
+    <option value="source_za" {{ 'selected' if sort_by == 'source_za' }}>Source Z–A</option>
+  </select>
+  {% if show_hidden %}<input type="hidden" name="show_hidden" value="1">{% endif %}
+  <button type="submit" class="btn-add">Search</button>
+  {% if query or source_filter or sort_by != 'newest' %}
+    <a href="{{ url_for('index', show_hidden=1 if show_hidden else None) }}" class="clear-search">Clear</a>
+  {% endif %}
+</form>
+
+<div class="select-mode-row">
+  {% if select_mode %}
+    <a href="{{ url_for('index', q=query, source_filter=source_filter, sort=sort_by) }}" class="btn-select-mode is-on">✓ Select mode on — click to exit</a>
+  {% else %}
+    <a href="{{ url_for('index', q=query, source_filter=source_filter, sort=sort_by, select=1) }}" class="btn-select-mode">Select stories</a>
+  {% endif %}
+</div>
+
+{% if pull_errors %}
+<div class="notif-banner">
+  {{ pull_errors|length }} source{{ 's' if pull_errors|length != 1 }} had trouble on the last pull —
+  <a href="{{ url_for('notifications_page') }}">see Notifications</a>
+</div>
+{% endif %}
+
+{% if hidden_count %}
+<div class="hidden-toggle">
+  {% if show_hidden %}
+    <a href="{{ url_for('index', q=query, source_filter=source_filter, sort=sort_by) }}">Hide {{ hidden_count }} hidden stor{{ 'y' if hidden_count == 1 else 'ies' }}</a>
+  {% else %}
+    <a href="{{ url_for('index', show_hidden=1, q=query, source_filter=source_filter, sort=sort_by) }}">Show {{ hidden_count }} hidden stor{{ 'y' if hidden_count == 1 else 'ies' }}</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if truncated %}
+<p class="panel-hint">Showing the {{ articles|length }} most relevant stories — narrow your search to see more precisely.</p>
+{% endif %}
+
+{% if not articles %}
+  <div class="empty-state">
+    {% if active_count == 0 %}
+      <p class="empty-headline">No sources are switched on yet.</p>
+      <p>Head to <a href="{{ url_for('sources_page') }}">Sources</a> and pick a few outlets, then come back and pull the wire.</p>
+    {% elif query or source_filter %}
+      <p class="empty-headline">No stories match that search.</p>
+      <p><a href="{{ url_for('index') }}">Clear search</a> to see everything.</p>
+    {% else %}
+      <p class="empty-headline">Nothing on the wire yet.</p>
+      <p>Hit <strong>Pull latest</strong> above to fetch from your {{ active_count }} enabled source{{ 's' if active_count != 1 }}.</p>
+    {% endif %}
+  </div>
+{% else %}
+
+{% if select_mode %}
+<form method="post" action="{{ url_for('timelines_add_bulk') }}" id="bulk-add-form" class="bulk-bar">
+  <span class="bulk-bar-label">Add checked stories to:</span>
+  <select name="existing_timeline" form="bulk-add-form">
+    <option value="">Choose existing…</option>
+    {% for t in timelines %}
+      <option value="{{ t.id }}">{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="new_timeline_name" placeholder="or new timeline name" form="bulk-add-form">
+  <button type="submit" form="bulk-add-form" class="btn-add">Add selected</button>
+</form>
+{% endif %}
+
+<div class="wire">
+  {% for a in articles %}
+  <article class="event {{ 'is-hidden-event' if a.is_hidden }}">
+    <div class="event-time-col">
+      {% if select_mode %}
+        <input type="checkbox" name="article_ids" value="{{ a.id }}" form="bulk-add-form" class="select-checkbox">
+      {% endif %}
+      <span class="abs-date">{{ a.published | format_date }}</span>
+      <span class="rel-time">{{ a.published | relative_time }}</span>
+      {% if a.is_new %}<span class="new-tag">NEW</span>{% endif %}
+    </div>
+    <div class="event-card">
+      <div class="event-card-top">
+        <h2 class="event-headline">
+          <a href="{{ a.link }}" target="_blank" rel="noopener">{{ a.title }}</a>
+        </h2>
+        <form method="post" action="{{ url_for('unhide_article' if a.is_hidden else 'hide_article', article_id=a.id) }}" class="hide-form">
+          <button type="submit" class="btn-icon" title="{{ 'Unhide this story' if a.is_hidden else 'Hide this story' }}">{{ '↺' if a.is_hidden else '✕' }}</button>
+        </form>
+      </div>
+
+      <div class="stamp-row">
+        <span class="stamp">{{ a.source_name }}</span>
+      </div>
+
+      <details class="add-to-timeline">
+        <summary>+ Add to a custom timeline</summary>
+        <form method="post" action="{{ url_for('timelines_add_story') }}" class="add-to-timeline-form">
+          <input type="hidden" name="headline" value="{{ a.title }}">
+          <input type="hidden" name="link" value="{{ a.link }}">
+          <input type="hidden" name="sources" value="{{ a.source_name }}">
+          <input type="hidden" name="published" value="{{ a.published }}">
+          <input type="hidden" name="published_ts" value="{{ a.published_ts }}">
+          <select name="existing_timeline">
+            <option value="">Choose existing…</option>
+            {% for t in timelines %}
+              <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="new_timeline_name" placeholder="or new timeline name">
+          <button type="submit" class="btn-add">Add</button>
+        </form>
+      </details>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

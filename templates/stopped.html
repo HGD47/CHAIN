@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wire — Stopped</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="page" style="max-width:500px; padding-top:80px; text-align:center;">
+  <p class="empty-headline">Wire has stopped.</p>
+  <p style="color:var(--muted);">This tab will try to close itself in a moment. If it doesn't (some browsers block that), you can close it yourself. To start Wire again, double-click the launcher file the same way you did the first time.</p>
+</main>
+<script>setTimeout(function () { window.close(); }, 500);</script>
+</body>
+</html>

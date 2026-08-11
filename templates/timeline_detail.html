@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ timeline.name }} — Wire{% endblock %}
+{% block content %}
+
+<section class="run-bar no-print">
+  <div class="run-bar-status">
+    <a href="{{ url_for('timelines_list') }}" class="back-link">&larr; All timelines</a>
+  </div>
+  <div class="run-bar-actions">
+    <button type="button" class="btn-refresh" onclick="window.print()">Print / Save as PDF</button>
+    <form method="post" action="{{ url_for('timeline_delete', timeline_id=timeline.id) }}"
+          onsubmit="return confirm('Delete the whole \'{{ timeline.name }}\' timeline? This can\'t be undone.');">
+      <button type="submit" class="btn-remove">Delete timeline</button>
+    </form>
+  </div>
+</section>
+
+<form method="post" action="{{ url_for('timeline_rename', timeline_id=timeline.id) }}" class="rename-form no-print">
+  <input type="text" name="name" value="{{ timeline.name }}" class="rename-input" size="1">
+  <button type="submit" class="btn-tiny btn-rename">Rename</button>
+</form>
+<h1 class="print-only timeline-title">{{ timeline.name }}</h1>
+<p class="panel-hint">{{ stories|length }} stor{{ 'y' if stories|length == 1 else 'ies' }}, oldest to newest.</p>
+
+<details class="rule-panel no-print" {{ 'open' if timeline.rule }}>
+  <summary>{{ 'Auto-match rule (active)' if timeline.rule else '+ Set up an auto-match rule' }}</summary>
+
+  {% if timeline.rule %}
+  <div class="rule-summary">
+    <p>
+      <strong>{{ timeline.rule.keywords | join(' + ') }}</strong> —
+      {% if timeline.rule.mode == 'same_article' %}
+        all keywords must appear in the same article
+      {% else %}
+        keywords can appear in different articles, within {{ timeline.rule.window_days }} day{{ 's' if timeline.rule.window_days != 1 }} of each other
+      {% endif %}
+      {% if timeline.rule.search_body %}· also searches full article text{% endif %}
+    </p>
+    <div class="rule-actions">
+      <form method="post" action="{{ url_for('timeline_check_rule', timeline_id=timeline.id) }}">
+        <button type="submit" class="btn-add">Check for matches now</button>
+      </form>
+      <form method="post" action="{{ url_for('timeline_clear_rule', timeline_id=timeline.id) }}"
+            onsubmit="return confirm('Remove this rule? Stories already added stay on the timeline.');">
+        <button type="submit" class="btn-remove">Remove rule</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('timeline_save_rule', timeline_id=timeline.id) }}" class="rule-form">
+    <p class="field-hint">Up to 4 keywords. New matching stories get added automatically on every pull, and you can also check on demand.</p>
+    <div class="rule-keywords">
+      {% for i in range(1, 5) %}
+        <input type="text" name="keyword{{ i }}" placeholder="Keyword {{ i }}"
+          value="{{ timeline.rule.keywords[i-1] if timeline.rule and timeline.rule.keywords|length >= i else '' }}">
+      {% endfor %}
+    </div>
+
+    <div class="rule-mode-row">
+      <label class="radio-row">
+        <input type="radio" name="mode" value="same_article" {{ 'checked' if not timeline.rule or timeline.rule.mode == 'same_article' }}>
+        <span>All keywords must appear in the <strong>same article</strong></span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="mode" value="cross_article" {{ 'checked' if timeline.rule and timeline.rule.mode == 'cross_article' }}>
+        <span>Keywords can appear in <strong>different articles</strong>, within
+        <input type="number" name="window_days" min="1" max="90" value="{{ timeline.rule.window_days if timeline.rule else 21 }}" class="window-input">
+        days of each other</span>
+      </label>
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" name="search_body" {{ 'checked' if timeline.rule and timeline.rule.search_body }}>
+      Also search full article text, not just headline/summary (slower — fetches each candidate's full page, capped per check, may fail on some sites)
+    </label>
+
+    <button type="submit" class="btn-primary">{{ 'Update rule' if timeline.rule else 'Save rule' }}</button>
+  </form>
+</details>
+
+{% if not stories %}
+  <div class="empty-state">
+    <p class="empty-headline">Nothing added yet.</p>
+    <p>Go to the <a href="{{ url_for('index') }}">Timeline</a> page and use "+ Add to a custom timeline" on any story.</p>
+  </div>
+{% else %}
+<div class="wire">
+  {% for story in stories %}
+  <article class="event">
+    <div class="event-time-col">
+      <span class="abs-date">{{ story.published_ts | format_date }}</span>
+      <span class="rel-time">{{ story.published_ts | relative_time }}</span>
+    </div>
+    <div class="event-card">
+      <div class="event-card-top">
+        <h2 class="event-headline">
+          <a href="{{ story.link }}" target="_blank" rel="noopener">{{ story.headline }}</a>
+        </h2>
+        <form method="post" action="{{ url_for('timeline_remove_story', timeline_id=timeline.id) }}" class="hide-form no-print">
+          <input type="hidden" name="link" value="{{ story.link }}">
+          <button type="submit" class="btn-icon" title="Remove from this timeline">✕</button>
+        </form>
+      </div>
+      {% if story.sources %}
+      <div class="stamp-row">
+        {% for source in story.sources.split(', ') %}
+          <span class="stamp">{{ source }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

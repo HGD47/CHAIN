@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Notifications — Wire{% endblock %}
+{% block content %}
+
+{% set uncleared = notifications | selectattr('cleared', 'equalto', false) | list %}
+{% set cleared = notifications | selectattr('cleared', 'equalto', true) | list %}
+
+<section class="run-bar">
+  <div class="run-bar-status">
+    <span class="run-label">{{ uncleared|length }} active notification{{ 's' if uncleared|length != 1 }}</span>
+  </div>
+  {% if uncleared %}
+  <form method="post" action="{{ url_for('notifications_clear_all') }}">
+    <button type="submit" class="btn-refresh">Clear all</button>
+  </form>
+  {% endif %}
+</section>
+
+{% if not uncleared %}
+  <div class="empty-state">
+    <p class="empty-headline">All caught up.</p>
+    <p>System messages — source errors on a pull, storage warnings — show up here.</p>
+  </div>
+{% else %}
+<div class="wire">
+  {% for n in uncleared %}
+  <article class="event">
+    <div class="event-time-col">
+      <span class="abs-date">{{ n.created_at | format_date }}</span>
+      <span class="rel-time">{{ n.created_at | relative_time }}</span>
+    </div>
+    <div class="event-card notif-card notif-{{ n.kind }}">
+      <div class="event-card-top">
+        <h2 class="event-headline notif-headline">{{ n.summary }}</h2>
+        <form method="post" action="{{ url_for('notification_clear', notif_id=n.id) }}" class="hide-form">
+          <button type="submit" class="btn-icon" title="Clear this notification">✕</button>
+        </form>
+      </div>
+      {% if n.details %}
+      <ul class="notif-details">
+        {% for d in n.details %}
+          <li><strong>{{ d.source }}</strong> — {{ d.error }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if cleared %}
+<details class="cleared-history">
+  <summary>{{ cleared|length }} cleared notification{{ 's' if cleared|length != 1 }}</summary>
+  <ul class="notif-details">
+    {% for n in cleared %}
+      <li>{{ n.created_at | format_date }} — {{ n.summary }}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+
+{% endblock %}

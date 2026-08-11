@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Settings — Wire{% endblock %}
+{% block content %}
+
+<form method="post" action="{{ url_for('settings') }}">
+
+<section class="panel" style="border-top:none; padding-top:0;">
+  <h1 class="panel-title">History</h1>
+  <p class="panel-hint">Every pull adds to a running history instead of replacing it. This controls how many days back to keep before an article is quietly dropped from local storage.</p>
+  <div class="field-row">
+    <label for="retention_days">Keep articles for this many days</label>
+    <input type="number" id="retention_days" name="retention_days" min="7" max="365"
+      value="{{ config.retention_days | int }}">
+  </div>
+</section>
+
+<section class="panel">
+  <h1 class="panel-title">Automatic pulls</h1>
+  <p class="panel-hint">Off by default — Wire only ever fetches when you click "Pull latest." Turning this on will also pull automatically while the app stays open, which helps catch stories that would otherwise scroll off a fast-moving outlet's feed between your visits. It can't retrieve anything from while your computer was off or the app was closed.</p>
+  <div class="field-row">
+    <label class="checkbox-row">
+      <input type="checkbox" name="auto_pull_enabled" {{ 'checked' if config.auto_pull_enabled }}>
+      Enable automatic pulls while Wire is running
+    </label>
+  </div>
+  <div class="field-row">
+    <label for="auto_pull_interval_hours">Pull automatically every this many hours</label>
+    <input type="number" id="auto_pull_interval_hours" name="auto_pull_interval_hours" min="1" max="48"
+      value="{{ config.auto_pull_interval_hours | int }}">
+  </div>
+</section>
+
+<section class="panel">
+  <h1 class="panel-title">Storage</h1>
+  <p class="panel-hint">
+    <span class="storage-icon">🗄</span>
+    Your saved article history is currently using <strong>{{ storage_used_mb }} MB</strong> on disk.
+  </p>
+  <div class="field-row">
+    <label for="storage_limit_mb">Warn me once storage passes this many MB</label>
+    <input type="range" id="storage_limit_mb" name="storage_limit_mb" min="0" max="500" step="10"
+      value="{{ config.storage_limit_mb | int }}" oninput="document.getElementById('storage-limit-readout').textContent = this.value == 0 ? 'Unlimited' : this.value + ' MB'">
+    <p class="slider-readout" id="storage-limit-readout">{{ 'Unlimited' if config.storage_limit_mb == 0 else (config.storage_limit_mb | int | string) + ' MB' }}</p>
+    <p class="field-hint">Left all the way down (0) means no limit — this is the default, and fine for most people. If you do set a limit, Wire only warns you in Notifications when you cross it; nothing is ever deleted automatically. To actually reduce storage, lower "Keep articles for this many days" above.</p>
+  </div>
+</section>
+
+<button type="submit" class="btn-primary">Save settings</button>
+</form>
+
+{% endblock %}
