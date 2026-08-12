@@ -770,3 +770,40 @@ body.theme-light .region-tag:hover { color: #ffffff; }
   margin-top: 10px;
   max-width: 60ch;
 }
+
+/* ---------- Moved events (Your Timelines: manually repositioned) ---------- */
+.is-moved-event .event-time-col { border-right-color: var(--focus); }
+.moved-tag {
+  display: inline-block;
+  background: var(--focus);
+  color: #000000;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+  cursor: help;
+}
+.moved-original {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.is-moved-event .event-card { border-left: 2px solid var(--focus); }
+
+/* ---------- Custom (non-article) events ---------- */
+.stamp-custom { border-color: var(--pink); color: var(--pink); background: rgba(255,143,184,0.08); }
+.event-note { font-size: 0.84rem; color: var(--muted); margin: -4px 0 10px; font-style: italic; }
+
+.custom-event-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.custom-event-form input {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+}
+.custom-event-form input[type="text"] { flex: 1 1 160px; }
+.custom-event-form input[type="url"] { flex: 1 1 140px; }

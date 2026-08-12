@@ -204,11 +204,28 @@ def create_timeline(timelines: list, name: str) -> dict:
 
 
 def add_story_to_timeline(timeline: dict, story: dict) -> bool:
-    existing_links = {s.get("link") for s in timeline["stories"] if s.get("link")}
-    if story.get("link") and story["link"] in existing_links:
-        return False
+    """Appends a story to a timeline, deduped by link — but only for
+    article-derived stories (custom events typically have no link, so
+    they're never deduped against each other). Every story gets a
+    stable id, used for removal/reordering/date-override instead of
+    link (which custom events may not have)."""
+    if story.get("link"):
+        existing_links = {s.get("link") for s in timeline["stories"] if s.get("link")}
+        if story["link"] in existing_links:
+            return False
+    story = dict(story)
+    story.setdefault("id", uuid.uuid4().hex[:12])
+    story.setdefault("display_ts", None)
+    story.setdefault("is_custom", False)
     timeline["stories"].append(story)
     return True
+
+
+def find_story(timeline: dict, story_id: str):
+    for s in timeline["stories"]:
+        if s.get("id") == story_id:
+            return s
+    return None
 
 
 # ---------- System notifications (source errors, storage warnings) ----------

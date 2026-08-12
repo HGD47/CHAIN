@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 import logging
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ from config_store import (
     load_articles, save_articles, merge_articles, get_articles_storage_mb,
     load_dismissed, save_dismissed,
     load_timelines, save_timelines, find_timeline, find_timeline_by_name,
-    create_timeline, add_story_to_timeline,
+    create_timeline, add_story_to_timeline, find_story,
     load_notifications, save_notifications, add_notification, has_uncleared_of_kind,
 )
 from sources import STARTER_SOURCES, SOURCE_INFO
@@ -140,8 +141,19 @@ def _format_date(ts_or_iso) -> str:
     return f"{dt.strftime('%b')} {dt.day} \u00b7 {time_str}"
 
 
+def _to_datetime_local_value(ts) -> str:
+    """Formats a unix timestamp for use as a <input type="datetime-local">
+    value/default, in the browser's (i.e. this machine's) local time."""
+    try:
+        dt = datetime.fromtimestamp(float(ts), tz=timezone.utc).astimezone()
+    except (ValueError, TypeError):
+        return ""
+    return dt.strftime("%Y-%m-%dT%H:%M")
+
+
 app.jinja_env.filters["relative_time"] = _relative_time
 app.jinja_env.filters["format_date"] = _format_date
+app.jinja_env.filters["datetime_local"] = _to_datetime_local_value
 
 
 # ---------- Shared pull logic (used by manual Refresh AND background auto-pull) ----------
@@ -563,19 +575,124 @@ def timeline_detail(timeline_id):
         flash("That timeline doesn't exist (maybe it was deleted).", "error")
         return redirect(url_for("timelines_list"))
 
-    stories = sorted(timeline["stories"], key=lambda s: s.get("published_ts", 0))
+    def effective_ts(s):
+        return s.get("display_ts") if s.get("display_ts") else s.get("published_ts", 0)
+
+    stories = sorted(timeline["stories"], key=effective_ts)
+    for s in stories:
+        s = s  # (already a dict reference from timeline["stories"])
+        s["effective_ts"] = effective_ts(s)
+        s["is_moved"] = bool(s.get("display_ts")) and abs(s["display_ts"] - s.get("published_ts", 0)) > 60
+        s["region_tags"] = [
+            (k, REGION_DEFS[k].get("display", REGION_DEFS[k]["label"]))
+            for k in tag_regions({"title": s.get("headline", ""), "summary": ""})
+        ]
+
     return render_template("timeline_detail.html", timeline=timeline, stories=stories)
 
 
 @app.route("/timelines/<timeline_id>/remove", methods=["POST"])
 def timeline_remove_story(timeline_id):
-    link = request.form.get("link", "")
+    story_id = request.form.get("story_id", "")
     timelines = load_timelines()
     timeline = find_timeline(timelines, timeline_id)
     if timeline:
-        timeline["stories"] = [s for s in timeline["stories"] if s.get("link") != link]
+        timeline["stories"] = [s for s in timeline["stories"] if s.get("id") != story_id]
         save_timelines(timelines)
         flash("Removed from timeline.", "success")
+    return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+
+@app.route("/timelines/<timeline_id>/add_event", methods=["POST"])
+def timeline_add_custom_event(timeline_id):
+    """Adds a manually-created event to a timeline — not pulled from any
+    article. Useful for marking when something actually happened, even
+    if no single article covers just that moment."""
+    timelines = load_timelines()
+    timeline = find_timeline(timelines, timeline_id)
+    if not timeline:
+        flash("That timeline doesn't exist.", "error")
+        return redirect(url_for("timelines_list"))
+
+    title = request.form.get("title", "").strip()
+    raw_dt = request.form.get("event_datetime", "").strip()
+    link = request.form.get("link", "").strip()
+    note = request.form.get("note", "").strip()
+
+    if not title or not raw_dt:
+        flash("A custom event needs at least a title and a date.", "error")
+        return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+    try:
+        # datetime-local inputs have no timezone info — treat as the
+        # browser's local time, same as everywhere else dates are shown.
+        dt_local = datetime.fromisoformat(raw_dt).astimezone()
+    except ValueError:
+        flash("Couldn't read that date/time.", "error")
+        return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+    story = {
+        "id": uuid.uuid4().hex[:12],
+        "headline": title,
+        "link": link,
+        "sources": "Custom event",
+        "published": dt_local.astimezone(timezone.utc).isoformat(),
+        "published_ts": dt_local.timestamp(),
+        "display_ts": None,
+        "is_custom": True,
+        "note": note,
+        "added_at": time.time(),
+    }
+    timeline["stories"].append(story)
+    save_timelines(timelines)
+    flash(f'Added custom event "{title}".', "success")
+    return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+
+@app.route("/timelines/<timeline_id>/story/<story_id>/set_date", methods=["POST"])
+def timeline_set_story_date(timeline_id, story_id):
+    """Overrides where a story sits on the timeline — e.g. moving a
+    delayed report to sit alongside other coverage of when the event it
+    describes actually happened, rather than when it was published. The
+    story's real published date is kept and shown alongside it whenever
+    it's been moved, so the discrepancy stays visible instead of hidden."""
+    timelines = load_timelines()
+    timeline = find_timeline(timelines, timeline_id)
+    if not timeline:
+        flash("That timeline doesn't exist.", "error")
+        return redirect(url_for("timelines_list"))
+
+    story = find_story(timeline, story_id)
+    if not story:
+        flash("That story isn't on this timeline.", "error")
+        return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+    raw_dt = request.form.get("display_datetime", "").strip()
+    if not raw_dt:
+        flash("Couldn't read that date/time.", "error")
+        return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+    try:
+        dt_local = datetime.fromisoformat(raw_dt).astimezone()
+    except ValueError:
+        flash("Couldn't read that date/time.", "error")
+        return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+    story["display_ts"] = dt_local.timestamp()
+    save_timelines(timelines)
+    flash("Moved on the timeline.", "success")
+    return redirect(url_for("timeline_detail", timeline_id=timeline_id))
+
+
+@app.route("/timelines/<timeline_id>/story/<story_id>/reset_date", methods=["POST"])
+def timeline_reset_story_date(timeline_id, story_id):
+    timelines = load_timelines()
+    timeline = find_timeline(timelines, timeline_id)
+    if timeline:
+        story = find_story(timeline, story_id)
+        if story:
+            story["display_ts"] = None
+            save_timelines(timelines)
+            flash("Reset to its original date.", "success")
     return redirect(url_for("timeline_detail", timeline_id=timeline_id))
 
 

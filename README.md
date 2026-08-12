@@ -7,6 +7,25 @@ feed you enable.
 
 ## What's new in this version
 
+- **Move a story on its timeline (item 15)** — every story on a custom
+  timeline has a "Move on the timeline" control: set a different date
+  and it re-sorts to sit there instead — for aligning delayed coverage
+  with when the real-world event actually happened, per your original
+  CNN/CBC example. A moved story gets a `MOVED` tag and shows its
+  original publish date alongside the new one, so the discrepancy stays
+  visible instead of getting hidden. (Implementation note: rather than a
+  literal connecting line drawn across the page — which would need a
+  JS/canvas layer this app doesn't otherwise depend on — the original
+  date is shown inline next to the moved story. Functionally the same
+  goal: you always know both dates.) "Reset to original date" undoes it.
+- **Custom events (item 16)** — "+ Add a custom event" on any timeline
+  lets you add an event directly (title, date, optional link/note) —
+  it doesn't have to come from a pulled article.
+- **Region tags on Your Timelines (item 23)** — the orange region tag
+  (added last round on the main Timeline/Regions pages) now also shows
+  on every story on your custom timelines.
+- **Capital markers removed** from all 12 region maps, per your request.
+
 - **Regions** — a new tab covering 5 countries (Canada, USA, Spain, UK,
   Mexico) and 7 supra-national groupings (EU, Europe, North America,
   South America, Africa, Asia, NATO). Every story gets scanned for
